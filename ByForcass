@@ -1,0 +1,1207 @@
+-- SafeExecutor with Loading Screen ("Wheather")
+-- Place as a LocalScript in StarterPlayerScripts or StarterGui and run via Play.
+
+-- Services
+local TweenService      = game:GetService("TweenService")
+local TeleportService   = game:GetService("TeleportService")
+local HttpService       = game:GetService("HttpService")
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local player            = Players.LocalPlayer
+
+if not player then
+    warn("[SafeExecutor] Player not available — make sure this is a LocalScript and run in Play mode.")
+    return
+end
+
+-- small robust split (fallback if string.split not available)
+local function splitString(str, sep)
+    if str == nil then return {} end
+    if sep == nil then sep = "%s" end
+    if string.split then
+        return string.split(str, sep)
+    else
+        local t = {}
+        local pattern = "([^" .. sep .. "]+)"
+        for part in string.gmatch(str, pattern) do
+            table.insert(t, part)
+        end
+        return t
+    end
+end
+
+local function trim(s)
+    if not s then return "" end
+    return s:match("^%s*(.-)%s*$")
+end
+
+-- Loading Screen (fade in -> hold -> fade out) showing "Wheather"
+do
+    local loadingGui = Instance.new("ScreenGui")
+    loadingGui.Name = "LoadingGui"
+    loadingGui.ResetOnSpawn = false
+    loadingGui.IgnoreGuiInset = true
+    loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    loadingGui.Parent = player:WaitForChild("PlayerGui")
+
+    local bg = Instance.new("Frame", loadingGui)
+    bg.Size = UDim2.new(1,0,1,0)
+    bg.Position = UDim2.new(0,0,0,0)
+    bg.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    bg.BackgroundTransparency = 1
+    bg.BorderSizePixel = 0
+
+    local label = Instance.new("TextLabel", loadingGui)
+    label.Size = UDim2.new(1,0,0,120)
+    label.Position = UDim2.new(0,0,0.5,-60)
+    label.BackgroundTransparency = 1
+    label.Text = "Wheather" -- spelled as requested
+    label.Font = Enum.Font.SourceSansBold
+    label.TextScaled = true
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+    label.TextTransparency = 1
+
+    local fadeInTime = 0.9
+    local holdTime = 1.6
+    local fadeOutTime = 0.9
+
+    local t1 = TweenService:Create(bg, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25})
+    local t2 = TweenService:Create(label, TweenInfo.new(fadeInTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+    t1:Play(); t2:Play()
+    t2.Completed:Wait()
+
+    task.wait(holdTime)
+
+    local t3 = TweenService:Create(bg, TweenInfo.new(fadeOutTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
+    local t4 = TweenService:Create(label, TweenInfo.new(fadeOutTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1})
+    t3:Play(); t4:Play()
+    t4.Completed:Wait()
+
+    loadingGui:Destroy()
+end
+
+-- Begin main executor UI & logic
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SafeExecutor"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Executor Frame
+local frame = Instance.new("Frame")
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Position = UDim2.new(0.3, 0, 0.3, 0)
+frame.Size = UDim2.new(0, 400, 0, 250)
+frame.Active = true
+frame.Draggable = true
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "TrixPloit | Made By Kieuro"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = frame
+
+-- Scrollable TextBox for code
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Position = UDim2.new(0, 5, 0, 35)
+scrollFrame.Size = UDim2.new(1, -10, 0.7, -35)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.Parent = frame
+
+local codeBox = Instance.new("TextBox")
+codeBox.Size = UDim2.new(1, -10, 1, 0)
+codeBox.Position = UDim2.new(0, 5, 0, 0)
+codeBox.BackgroundTransparency = 1
+codeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+codeBox.ClearTextOnFocus = false
+codeBox.TextXAlignment = Enum.TextXAlignment.Left
+codeBox.TextYAlignment = Enum.TextYAlignment.Top
+codeBox.MultiLine = true
+codeBox.Font = Enum.Font.Code
+codeBox.TextSize = 14
+codeBox.Text = ""
+codeBox.Parent = scrollFrame
+
+codeBox:GetPropertyChangedSignal("TextBounds"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, codeBox.TextBounds.Y + 10)
+end)
+
+-- Button creator (main buttons style: black background, white text)
+local function createButton(position, text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.25, -2, 0.15, 0)
+    btn.Position = position
+    btn.Text = text
+    btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- black background
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 16
+    btn.BorderSizePixel = 1
+    btn.BorderColor3 = Color3.fromRGB(70, 70, 70)
+    btn.AutoButtonColor = true
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 20)
+    corner.Parent = btn
+
+    -- store original color as numeric attributes (safe restoration)
+    btn:SetAttribute("origR", btn.BackgroundColor3.R)
+    btn:SetAttribute("origG", btn.BackgroundColor3.G)
+    btn:SetAttribute("origB", btn.BackgroundColor3.B)
+    btn:SetAttribute("Flashing", false)
+
+    -- Hover effect (respect flashing state)
+    btn.MouseEnter:Connect(function()
+        if btn:GetAttribute("Flashing") then return end
+        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    end)
+    btn.MouseLeave:Connect(function()
+        if btn:GetAttribute("Flashing") then return end
+        local r = btn:GetAttribute("origR") or 0
+        local g = btn:GetAttribute("origG") or 0
+        local b = btn:GetAttribute("origB") or 0
+        btn.BackgroundColor3 = Color3.new(r, g, b)
+    end)
+
+    btn.Parent = frame
+    return btn
+end
+
+-- Buttons
+local executeBtn = createButton(UDim2.new(0, 0, 0.85, 0), "Execute")
+local clearBtn   = createButton(UDim2.new(0.25, 1, 0.85, 0), "Clear")
+local injectBtn  = createButton(UDim2.new(0.50, 2, 0.85, 0), "Inject")
+local playersBtn = createButton(UDim2.new(0.75, 3, 0.70, 0), "Players")
+local commandBtn = createButton(UDim2.new(0.75, 3, 0.85, 0), "Command")
+
+-- Notification Frame
+local notif = Instance.new("Frame")
+notif.Size = UDim2.new(0, 300, 0, 60)
+notif.Position = UDim2.new(0.5, -150, -0.2, 0)
+notif.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+notif.BackgroundTransparency = 0.1
+notif.Visible = false
+notif.BorderSizePixel = 0
+notif.ZIndex = 10
+notif:SetAttribute("Showing", false)
+notif.Parent = screenGui
+
+local notifCorner = Instance.new("UICorner")
+notifCorner.CornerRadius = UDim.new(0, 12)
+notifCorner.Parent = notif
+
+local icon = Instance.new("ImageLabel", notif)
+icon.Size = UDim2.new(0, 40, 0, 40)
+icon.Position = UDim2.new(0, 10, 0.5, -20)
+icon.BackgroundTransparency = 1
+icon.Image = "rbxassetid://6034996695"
+
+local notifText = Instance.new("TextLabel", notif)
+notifText.Size = UDim2.new(1, -60, 0.5, 0)
+notifText.Position = UDim2.new(0, 60, 0, 5)
+notifText.BackgroundTransparency = 1
+notifText.TextColor3 = Color3.fromRGB(255, 255, 255)
+notifText.TextXAlignment = Enum.TextXAlignment.Left
+notifText.Font = Enum.Font.SourceSansBold
+notifText.TextSize = 16
+
+local notifMsg = Instance.new("TextLabel", notif)
+notifMsg.Size = UDim2.new(1, -60, 0.5, -5)
+notifMsg.Position = UDim2.new(0, 60, 0.5, 0)
+notifMsg.BackgroundTransparency = 1
+notifMsg.TextColor3 = Color3.fromRGB(200, 200, 200)
+notifMsg.TextXAlignment = Enum.TextXAlignment.Left
+notifMsg.Font = Enum.Font.SourceSans
+notifMsg.TextSize = 14
+
+local function showNotification(titleText, message)
+    if notif:GetAttribute("Showing") then return end
+    notif:SetAttribute("Showing", true)
+    notifText.Text = titleText
+    notifMsg.Text = message
+    notif.Visible = true
+    TweenService:Create(notif, TweenInfo.new(0.3), {Position = UDim2.new(0.5, -150, 0.05, 0)}):Play()
+    task.wait(2)
+    TweenService:Create(notif, TweenInfo.new(0.3), {Position = UDim2.new(0.5, -150, -0.2, 0)}):Play()
+    task.wait(0.3)
+    notif.Visible = false
+    notif:SetAttribute("Showing", false)
+end
+
+-- Flash helper (visual feedback for buttons)
+local function flashButtonAndNotify(btn, color3, textOverride, duration)
+    duration = duration or 1.2
+    if not btn or not btn.Parent then return end
+    local ok, origR = pcall(function() return btn:GetAttribute("origR") end)
+    local origG = btn:GetAttribute("origG")
+    local origB = btn:GetAttribute("origB")
+    if not ok or origR == nil or origG == nil or origB == nil then
+        origR, origG, origB = btn.BackgroundColor3.R, btn.BackgroundColor3.G, btn.BackgroundColor3.B
+    end
+    local origText = btn.Text
+    btn:SetAttribute("Flashing", true)
+    pcall(function()
+        btn.BackgroundColor3 = color3
+        if textOverride then btn.Text = textOverride end
+    end)
+    task.delay(duration, function()
+        if btn and btn.Parent then
+            pcall(function()
+                btn.BackgroundColor3 = Color3.new(origR, origG, origB)
+                btn.Text = origText
+                btn:SetAttribute("Flashing", false)
+            end)
+        end
+    end)
+end
+
+-- inject state
+local injected = false
+
+-- Robust fetch helper
+local function fetchUrl(url)
+    local ok, res = pcall(function() return HttpService:GetAsync(url) end)
+    if ok and res and #res > 0 then return true, res end
+
+    if type(game.HttpGetAsync) == "function" then
+        ok, res = pcall(function() return game.HttpGetAsync(game, url) end)
+        if ok and res and #res > 0 then return true, res end
+    end
+
+    if type(game.HttpGet) == "function" then
+        ok, res = pcall(function() return game.HttpGet(game, url) end)
+        if ok and res and #res > 0 then return true, res end
+    end
+
+    return false, res
+end
+
+-- Create View GUI (spectate)
+local function createViewGui()
+    if screenGui:FindFirstChild("ViewFrame") then return end
+
+    local viewFrame = Instance.new("Frame")
+    viewFrame.Name = "ViewFrame"
+    viewFrame.Size = UDim2.new(0, 340, 0, 300)
+    viewFrame.Position = UDim2.new(0.5, -170, 0.35, 0)
+    viewFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    viewFrame.Active = true
+    viewFrame.Draggable = true
+    viewFrame.Parent = screenGui
+
+    local frameCorner = Instance.new("UICorner", viewFrame)
+    frameCorner.CornerRadius = UDim.new(0, 10)
+
+    local title = Instance.new("TextLabel", viewFrame)
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundTransparency = 1
+    title.Text = "Spectate Player"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 18
+
+    local closeBtn = Instance.new("TextButton", viewFrame)
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 18
+    closeBtn.MouseButton1Click:Connect(function()
+        local cam = workspace.CurrentCamera
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            cam.CameraSubject = player.Character:FindFirstChild("Humanoid")
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        viewFrame:Destroy()
+    end)
+
+    local listFrame = Instance.new("ScrollingFrame", viewFrame)
+    listFrame.Size = UDim2.new(1, -20, 1, -70)
+    listFrame.Position = UDim2.new(0, 10, 0, 40)
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    listFrame.ScrollBarThickness = 6
+    listFrame.BackgroundTransparency = 1
+
+    local uiListLayout = Instance.new("UIListLayout", listFrame)
+    uiListLayout.Padding = UDim.new(0, 6)
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local function smoothSpectate(targetPlayer)
+        local cam = workspace.CurrentCamera
+        if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            showNotification("Error", "Target not available")
+            return
+        end
+        local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local desiredCFrame = hrp.CFrame * CFrame.new(0, 5, 10)
+        local tweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        pcall(function()
+            local successTween = TweenService:Create(workspace.CurrentCamera, tweenInfo, {CFrame = desiredCFrame})
+            successTween:Play()
+        end)
+        task.delay(0.65, function()
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+                workspace.CurrentCamera.CameraSubject = targetPlayer.Character:FindFirstChild("Humanoid")
+                workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+            end
+        end)
+    end
+
+    local function makePlayerEntry(p)
+        local entry = Instance.new("Frame")
+        entry.Size = UDim2.new(1, 0, 0, 36)
+        entry.BackgroundTransparency = 1
+        entry.Parent = listFrame
+
+        local nameLabel = Instance.new("TextLabel", entry)
+        nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
+        nameLabel.Position = UDim2.new(0, 6, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = p.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.Font = Enum.Font.SourceSansBold
+        nameLabel.TextSize = 16
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local viewBtn = Instance.new("TextButton", entry)
+        viewBtn.Size = UDim2.new(0.22, 0, 0.8, 0)
+        viewBtn.Position = UDim2.new(0.55, 0, 0.1, 0)
+        viewBtn.Text = "View"
+        viewBtn.Font = Enum.Font.SourceSansBold
+        viewBtn.TextSize = 14
+        viewBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        viewBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        viewBtn.AutoButtonColor = true
+        local viewCorner = Instance.new("UICorner", viewBtn)
+        viewCorner.CornerRadius = UDim.new(0, 6)
+
+        local unviewBtn = Instance.new("TextButton", entry)
+        unviewBtn.Size = UDim2.new(0.22, 0, 0.8, 0)
+        unviewBtn.Position = UDim2.new(0.8, -6, 0.1, 0)
+        unviewBtn.Text = "Unview"
+        unviewBtn.Font = Enum.Font.SourceSansBold
+        unviewBtn.TextSize = 14
+        unviewBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+        unviewBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        unviewBtn.AutoButtonColor = true
+        local unviewCorner = Instance.new("UICorner", unviewBtn)
+        unviewCorner.CornerRadius = UDim.new(0, 6)
+
+        viewBtn.MouseButton1Click:Connect(function()
+            if not injected then
+                showNotification("Error", "Inject First")
+                return
+            end
+            smoothSpectate(p)
+            showNotification("Viewing", "Now spectating " .. p.Name)
+        end)
+
+        unviewBtn.MouseButton1Click:Connect(function()
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid")
+                workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+            end
+            showNotification("Stopped", "No longer spectating")
+        end)
+    end
+
+    local function populate()
+        for _, child in ipairs(listFrame:GetChildren()) do
+            if not child:IsA("UIListLayout") then
+                child:Destroy()
+            end
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then
+                makePlayerEntry(p)
+            end
+        end
+        local total = 0
+        for _, v in ipairs(listFrame:GetChildren()) do
+            if v:IsA("Frame") then total = total + (v.Size.Y.Offset or 36) + 6 end
+        end
+        listFrame.CanvasSize = UDim2.new(0,0,0, math.max(total, 0))
+    end
+
+    populate()
+
+    spawn(function()
+        while viewFrame.Parent do
+            task.wait(3)
+            if not viewFrame.Parent then break end
+            populate()
+        end
+    end)
+end
+
+-- Players GUI (shows PFP, name, Alive/Dead and Active(count))
+local playersGuiConnections = {} -- keyed by UserId; holds frames and conns
+
+local function createPlayersGui()
+    if screenGui:FindFirstChild("PlayersFrame") then return end
+
+    local frameP = Instance.new("Frame")
+    frameP.Name = "PlayersFrame"
+    frameP.Size = UDim2.new(0, 360, 0, 380)
+    frameP.Position = UDim2.new(0.5, -180, 0.28, 0)
+    frameP.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    frameP.Active = true
+    frameP.Draggable = true
+    frameP.Parent = screenGui
+
+    local corner = Instance.new("UICorner", frameP)
+    corner.CornerRadius = UDim.new(0, 10)
+
+    local titleP = Instance.new("TextLabel", frameP)
+    titleP.Size = UDim2.new(1, 0, 0, 30)
+    titleP.Position = UDim2.new(0, 0, 0, 4)
+    titleP.BackgroundTransparency = 1
+    titleP.Text = "Active (0)"
+    titleP.TextColor3 = Color3.fromRGB(255,255,255)
+    titleP.Font = Enum.Font.SourceSansBold
+    titleP.TextSize = 18
+
+    local closeBtn = Instance.new("TextButton", frameP)
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255,80,80)
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 18
+
+    -- scrolling list
+    local listFrame = Instance.new("ScrollingFrame", frameP)
+    listFrame.Size = UDim2.new(1, -20, 1, -50)
+    listFrame.Position = UDim2.new(0, 10, 0, 40)
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    listFrame.ScrollBarThickness = 6
+    listFrame.BackgroundTransparency = 1
+
+    local layout = Instance.new("UIListLayout", listFrame)
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local function refreshActiveCount()
+        local active = 0
+        for _, p in ipairs(Players:GetPlayers()) do
+            local alive = p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0
+            if alive then active = active + 1 end
+        end
+        titleP.Text = string.format("Active (%d)", active)
+    end
+
+    local function recalcCanvas()
+        task.defer(function()
+            local totalHeight = 0
+            for _, child in ipairs(listFrame:GetChildren()) do
+                if child:IsA("Frame") then
+                    totalHeight = totalHeight + (child.Size.Y.Offset or 52) + 6
+                end
+            end
+            listFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(totalHeight, 0))
+        end)
+    end
+
+    local function cleanupPlayerEntry(userId)
+        local info = playersGuiConnections[userId]
+        if info then
+            pcall(function() if info.charConn then info.charConn:Disconnect() end end)
+            pcall(function() if info.humConn then info.humConn:Disconnect() end end)
+            pcall(function() if info.healthConn then info.healthConn:Disconnect() end end)
+            pcall(function() if info.remConn then info.remConn:Disconnect() end end)
+            pcall(function() if info.frame and info.frame.Destroy then info.frame:Destroy() end end)
+            playersGuiConnections[userId] = nil
+        end
+    end
+
+    local function makeEntry(p)
+        if playersGuiConnections[p.UserId] and playersGuiConnections[p.UserId].frame then return end
+
+        local entry = Instance.new("Frame")
+        entry.Size = UDim2.new(1, 0, 0, 52)
+        entry.BackgroundTransparency = 1
+        entry.Parent = listFrame
+
+        local pfp = Instance.new("ImageLabel", entry)
+        pfp.Name = "PFP"
+        pfp.Size = UDim2.new(0, 40, 0, 40)
+        pfp.Position = UDim2.new(0, 4, 0.5, -20)
+        pfp.BackgroundTransparency = 1
+        pfp.Image = ""
+
+        spawn(function()
+            local ok, thumb = pcall(function()
+                return Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+            end)
+            if ok and thumb then
+                pfp.Image = thumb
+            end
+        end)
+
+        local nameLabel = Instance.new("TextLabel", entry)
+        nameLabel.Position = UDim2.new(0, 54, 0, 0)
+        nameLabel.Size = UDim2.new(0.6, 0, 1, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = p.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255,255,255)
+        nameLabel.Font = Enum.Font.SourceSansBold
+        nameLabel.TextSize = 16
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local statusBtn = Instance.new("TextButton", entry)
+        statusBtn.Size = UDim2.new(0.28, -6, 0.72, 0)
+        statusBtn.Position = UDim2.new(0.72, -6, 0.14, 0)
+        statusBtn.AutoButtonColor = false
+        statusBtn.Font = Enum.Font.SourceSansBold
+        statusBtn.TextSize = 14
+        statusBtn.TextColor3 = Color3.fromRGB(255,255,255)
+        local statusCorner = Instance.new("UICorner", statusBtn)
+        statusCorner.CornerRadius = UDim.new(0, 6)
+
+        local healthConn, diedConn, charConn
+
+        local function updateStatus()
+            local alive = p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0
+            if alive then
+                statusBtn.Text = "Alive"
+                statusBtn.BackgroundColor3 = Color3.fromRGB(0,200,0)
+            else
+                statusBtn.Text = "Dead"
+                statusBtn.BackgroundColor3 = Color3.fromRGB(200,0,0)
+            end
+            refreshActiveCount()
+        end
+
+        updateStatus()
+
+        charConn = p.CharacterAdded:Connect(function(char)
+            local hum = char:FindFirstChildWhichIsA("Humanoid") or char:WaitForChild("Humanoid", 5)
+            updateStatus()
+            if hum then
+                if healthConn then healthConn:Disconnect() end
+                if diedConn then diedConn:Disconnect() end
+                healthConn = hum.HealthChanged:Connect(function() updateStatus() end)
+                diedConn = hum.Died:Connect(function() updateStatus() end)
+            end
+        end)
+
+        if p.Character then
+            local hum = p.Character:FindFirstChildWhichIsA("Humanoid")
+            if hum then
+                healthConn = hum.HealthChanged:Connect(function() updateStatus() end)
+                diedConn = hum.Died:Connect(function() updateStatus() end)
+            end
+        end
+
+        local remConn = Players.PlayerRemoving:Connect(function(rp)
+            if rp == p then
+                cleanupPlayerEntry(p.UserId)
+                recalcCanvas()
+                refreshActiveCount()
+            end
+        end)
+
+        playersGuiConnections[p.UserId] = {
+            frame = entry,
+            charConn = charConn,
+            humConn = diedConn,
+            healthConn = healthConn,
+            remConn = remConn,
+        }
+    end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        makeEntry(p)
+    end
+
+    recalcCanvas()
+    refreshActiveCount()
+
+    local addConn = Players.PlayerAdded:Connect(function(p)
+        makeEntry(p)
+        task.delay(0.05, recalcCanvas)
+    end)
+
+    closeBtn.MouseButton1Click:Connect(function()
+        if addConn then addConn:Disconnect() end
+        for uid, _ in pairs(playersGuiConnections) do
+            cleanupPlayerEntry(uid)
+        end
+        playersGuiConnections = {}
+        frameP:Destroy()
+    end)
+end
+
+-- commands list
+local commandsList = {
+    "shop - Server hop",
+    "rejoin - Rejoin current server",
+    "join <game name> - Join game by search",
+    "view - Spectate players",
+    "players - Show players list (PFP + alive/dead)",
+    "kieuro - Load Kieuro external script",
+    "invisible - Become invisible",
+    "emote - Load Emote script",
+    "fly - Load Fly toggle script (R6 only)",
+    "commands - Show this list"
+}
+
+-- Process command function
+local function processCommand(raw)
+    raw = tostring(raw or "")
+    raw = trim(raw)
+    if raw == "" then return end
+
+    local parts = splitString(raw, " ")
+    local cmdLower = string.lower(parts[1] or "")
+    local rest = ""
+    if #parts > 1 then
+        rest = table.concat(parts, " ", 2)
+    end
+
+    print("[SafeExecutor] processCommand:", cmdLower, "args:", rest)
+
+    -- shop (server hop)
+    if cmdLower == "shop" then
+        showNotification("Command", "Server hopping...")
+        local ok, res = pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=10"
+            return HttpService:GetAsync(url)
+        end)
+        if ok then
+            local successDecode, servers = pcall(function() return HttpService:JSONDecode(res) end)
+            if successDecode and servers and servers.data then
+                local teleported = false
+                for _, v in pairs(servers.data) do
+                    if v.id and tostring(v.id) ~= tostring(game.JobId) then
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, {player})
+                        end)
+                        teleported = true
+                        break
+                    end
+                end
+                if not teleported then showNotification("Error", "No other server found") end
+            else
+                showNotification("Error", "failed to fetch servers")
+            end
+        else
+            showNotification("Error", "failed to fetch servers")
+        end
+
+    elseif cmdLower == "rejoin" then
+        showNotification("Command", "Rejoining server...")
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, {player})
+        end)
+
+    elseif cmdLower == "join" then
+        local searchQuery = trim(rest)
+        if searchQuery == "" then
+            showNotification("Error", "Provide a game name.")
+            return
+        end
+        showNotification("Searching", "Looking for '" .. searchQuery .. "'...")
+        local ok, res = pcall(function()
+            local url = "https://games.roblox.com/v1/games/list?keyword=" .. HttpService:UrlEncode(searchQuery) .. "&limit=10"
+            return HttpService:GetAsync(url)
+        end)
+
+        if not ok then
+            showNotification("Error", "Search failed.")
+            return
+        end
+
+        local decoded = nil
+        local successDecode, dec = pcall(function() return HttpService:JSONDecode(res) end)
+        if successDecode then decoded = dec end
+
+        if decoded and decoded.data and #decoded.data > 0 then
+            local target = decoded.data[1]
+            local placeId = target.rootPlaceId or target.placeId or target.place
+            if placeId then
+                showNotification("Joining", "Teleporting to " .. (target.name or "game"))
+                pcall(function()
+                    TeleportService:Teleport(placeId, player)
+                end)
+            else
+                showNotification("Error", "Found game but place id missing.")
+            end
+        else
+            showNotification("Error", "No game found for '" .. searchQuery .. "'")
+        end
+
+    elseif cmdLower == "view" then
+        if not injected then
+            showNotification("Error", "Inject First")
+            return
+        end
+        showNotification("Command", "Opening View GUI...")
+        createViewGui()
+
+    elseif cmdLower == "players" then
+        if not injected then
+            showNotification("Error", "Inject First")
+            return
+        end
+        showNotification("Command", "Opening Players GUI...")
+        createPlayersGui()
+
+    elseif cmdLower == "kieuro" then
+        local ok, body = fetchUrl("https://raw.githubusercontent.com/KieurOo/UnieUnversal/refs/heads/main/Uniechan")
+        if ok and body then
+            if type(loadstring) ~= "function" and type(load) ~= "function" then
+                showNotification("Error", "loadstring unavailable")
+                return
+            end
+            local loader = loadstring or load
+            local func, err = nil, nil
+            local succ, res = pcall(function() return loader(body) end)
+            if succ then func = res else err = res end
+            if func then
+                local ranOk, ranRet = pcall(func)
+                if ranOk then
+                    showNotification("Success", "Kieuro script loaded")
+                else
+                    showNotification("Error", tostring(ranRet))
+                end
+            else
+                showNotification("Error", "Load error: "..tostring(err))
+            end
+        else
+            showNotification("Error", "failed to fetch script.")
+        end
+
+    elseif cmdLower == "invisible" then
+        local ok, body = fetchUrl("https://pastebin.com/raw/3Rnd9rHf")
+        if ok and body then
+            if type(loadstring) ~= "function" and type(load) ~= "function" then
+                showNotification("Error", "loadstring unavailable")
+                return
+            end
+            local loader = loadstring or load
+            local func, err = nil, nil
+            local succ, res = pcall(function() return loader(body) end)
+            if succ then func = res else err = res end
+            if func then
+                local ranOk, ranRet = pcall(func)
+                if ranOk then
+                    showNotification("Success", "Invisible script loaded")
+                else
+                    showNotification("Error", tostring(ranRet))
+                end
+            else
+                showNotification("Error", "Load error: "..tostring(err))
+            end
+        else
+            showNotification("Error", "failed to fetch script.")
+        end
+
+    elseif cmdLower == "emote" then
+        local ok, body = fetchUrl("https://raw.githubusercontent.com/Gi7331/scripts/main/Emote.lua")
+        if ok and body then
+            if type(loadstring) ~= "function" and type(load) ~= "function" then
+                showNotification("Error", "loadstring unavailable")
+                return
+            end
+            local loader = loadstring or load
+            local func, err = nil, nil
+            local succ, res = pcall(function() return loader(body) end)
+            if succ then func = res else err = res end
+            if func then
+                local ranOk, ranRet = pcall(func)
+                if ranOk then
+                    showNotification("Success", "Emote script loaded")
+                else
+                    showNotification("Error", tostring(ranRet))
+                end
+            else
+                showNotification("Error", "Load error: "..tostring(err))
+            end
+        else
+            showNotification("Error", "failed to fetch script.")
+        end
+
+    -- FLY COMMAND (robust, R6-only)
+    elseif cmdLower == "fly" then
+        if not injected then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Inject First")
+            return
+        end
+
+        -- get humanoid safely
+        local character = player.Character or player.CharacterAdded and player.CharacterAdded:Wait()
+        local humanoid = nil
+        if character then
+            humanoid = character:FindFirstChildWhichIsA("Humanoid") or character:FindFirstChild("Humanoid")
+        end
+        if not humanoid then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Humanoid not found. Try respawning and inject again.")
+            return
+        end
+
+        -- only allow R6
+        if humanoid.RigType == Enum.HumanoidRigType.R15 then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Fly only works on R6 avatars.")
+            return
+        end
+
+        -- fetch script (try multiple fallbacks)
+        showNotification("Command", "Loading Fly script...")
+        local url = "https://raw.githubusercontent.com/weatherwess-lgtm/FlyToggle/refs/heads/main/Dafov"
+        local ok, body = fetchUrl(url)
+
+        if (not ok) or (not body) or tostring(body) == "" then
+            -- try game:HttpGet / HttpGetAsync fallbacks
+            local tried = false
+            pcall(function()
+                if type(game.HttpGet) == "function" then
+                    local succ, res = pcall(function() return game:HttpGet(url, true) end)
+                    if succ and res and tostring(res) ~= "" then
+                        ok, body = true, res
+                        tried = true
+                    end
+                end
+            end)
+            if not tried then
+                pcall(function()
+                    if type(game.HttpGet) == "function" then
+                        local succ2, res2 = pcall(function() return game:HttpGet(url) end)
+                        if succ2 and res2 and tostring(res2) ~= "" then
+                            ok, body = true, res2
+                        end
+                    end
+                end)
+            end
+        end
+
+        if not ok or not body or tostring(body) == "" then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Failed to fetch Fly script. Enable HTTP Requests (Studio) or check connectivity.")
+            print("[SafeExecutor] Fly fetch failed for URL:", url)
+            return
+        end
+
+        -- small debug: print script size
+        print("[SafeExecutor] Fly script fetched, length:", #tostring(body))
+
+        -- loadstring/load fallback
+        local loader = loadstring or load
+        if type(loader) ~= "function" then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "loadstring/load unavailable")
+            return
+        end
+
+        local func, loadErr = nil, nil
+        local okLoad, res = pcall(function() return loader(body) end)
+        if okLoad then
+            func = res
+        else
+            loadErr = res
+        end
+
+        if not func then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Load error: " .. tostring(loadErr))
+            print("[SafeExecutor] Fly load error:", tostring(loadErr))
+            return
+        end
+
+        -- run the fetched chunk
+        local ranOk, ranRet = pcall(func)
+        if ranOk then
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(0,200,0), "Fly", 1)
+            showNotification("Success", "Ran successfully.")
+        else
+            flashButtonAndNotify(commandBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Execution error: " .. tostring(ranRet))
+            print("[SafeExecutor] Fly execution error:", tostring(ranRet))
+        end
+
+    elseif cmdLower == "commands" or cmdLower == "command" then
+        showNotification("Command", "Opening Commands List...")
+
+        if screenGui:FindFirstChild("CommandsListFrame") then return end
+
+        local listFrame = Instance.new("Frame")
+        listFrame.Name = "CommandsListFrame"
+        listFrame.Size = UDim2.new(0, 320, 0, 200)
+        listFrame.Position = UDim2.new(0.5, -160, 0.4, 0)
+        listFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        listFrame.Active = true
+        listFrame.Draggable = true
+        listFrame.Parent = screenGui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = listFrame
+
+        local title = Instance.new("TextLabel", listFrame)
+        title.Size = UDim2.new(1, 0, 0, 30)
+        title.BackgroundTransparency = 1
+        title.Text = "Available Commands"
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.Font = Enum.Font.SourceSansBold
+        title.TextSize = 18
+
+        local closeBtn = Instance.new("TextButton", listFrame)
+        closeBtn.Size = UDim2.new(0, 30, 0, 30)
+        closeBtn.Position = UDim2.new(1, -35, 0, 5)
+        closeBtn.BackgroundTransparency = 1
+        closeBtn.Text = "X"
+        closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+        closeBtn.Font = Enum.Font.SourceSansBold
+        closeBtn.TextSize = 18
+        closeBtn.MouseButton1Click:Connect(function()
+            listFrame:Destroy()
+        end)
+
+        local scrolling = Instance.new("ScrollingFrame", listFrame)
+        scrolling.Size = UDim2.new(1, -20, 1, -40)
+        scrolling.Position = UDim2.new(0, 10, 0, 35)
+        scrolling.BackgroundTransparency = 1
+        scrolling.ScrollBarThickness = 6
+        scrolling.CanvasSize = UDim2.new(0,0,0,0)
+
+        local layout = Instance.new("UIListLayout", scrolling)
+        layout.Padding = UDim.new(0, 6)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        for _, cmd in ipairs(commandsList) do
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, 0, 0, 20)
+            label.BackgroundTransparency = 1
+            label.Text = cmd
+            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            label.Font = Enum.Font.SourceSans
+            label.TextSize = 14
+            label.TextXAlignment = Enum.TextXAlignment.Left
+            label.Parent = scrolling
+        end
+
+        scrolling.CanvasSize = UDim2.new(0, 0, 0, #commandsList * 26)
+
+    else
+        -- fallback: run as Lua code (requires injection)
+        if not injected then
+            showNotification("Error", "Inject First")
+            return
+        end
+        if type(loadstring) ~= "function" and type(load) ~= "function" then
+            showNotification("Error", "loadstring unavailable")
+            return
+        end
+        local loader = loadstring or load
+        local func, err = nil, nil
+        local okLoad, res = pcall(function() return loader(raw) end)
+        if okLoad then func = res else err = res end
+        if func then
+            local ok, ret = pcall(func)
+            if ok then
+                showNotification("Executed", "Command ran successfully")
+            else
+                showNotification("Error", tostring(ret))
+            end
+        else
+            showNotification("Error", tostring(err))
+        end
+    end
+end
+
+-- Command GUI creation when commandBtn clicked (uses processCommand)
+local commandFrame
+commandBtn.MouseButton1Click:Connect(function()
+    if commandFrame and commandFrame.Parent then
+        flashButtonAndNotify(commandBtn, Color3.fromRGB(255,170,0), "Open", 0.6)
+        return
+    end
+
+    commandFrame = Instance.new("Frame")
+    commandFrame.Size = UDim2.new(0, 320, 0, 140)
+    commandFrame.Position = UDim2.new(0.5, -160, 0.4, 0)
+    commandFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    commandFrame.Active = true
+    commandFrame.Draggable = true
+    commandFrame.Parent = screenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = commandFrame
+
+    local cmdTitle = Instance.new("TextLabel", commandFrame)
+    cmdTitle.Size = UDim2.new(1, 0, 0, 30)
+    cmdTitle.BackgroundTransparency = 1
+    cmdTitle.Text = "Enter Command"
+    cmdTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cmdTitle.Font = Enum.Font.SourceSansBold
+    cmdTitle.TextSize = 18
+
+    local closeBtn = Instance.new("TextButton", commandFrame)
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.TextSize = 18
+    closeBtn.MouseButton1Click:Connect(function()
+        commandFrame:Destroy()
+    end)
+
+    local cmdBox = Instance.new("TextBox", commandFrame)
+    cmdBox.Size = UDim2.new(1, -20, 0, 40)
+    cmdBox.Position = UDim2.new(0, 10, 0, 40)
+    cmdBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    cmdBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cmdBox.Font = Enum.Font.Code
+    cmdBox.TextSize = 14
+    cmdBox.PlaceholderText = "Type command here..."
+    cmdBox.Text = ""
+
+    local cmdCorner = Instance.new("UICorner")
+    cmdCorner.CornerRadius = UDim.new(0, 8)
+    cmdCorner.Parent = cmdBox
+
+    local runBtn = Instance.new("TextButton", commandFrame)
+    runBtn.Size = UDim2.new(1, -20, 0, 30)
+    runBtn.Position = UDim2.new(0, 10, 0, 90)
+    runBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- match main button style
+    runBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    runBtn.Font = Enum.Font.SourceSansBold
+    runBtn.TextSize = 16
+    runBtn.Text = "Run Command"
+
+    local runCorner = Instance.new("UICorner")
+    runCorner.CornerRadius = UDim.new(0, 8)
+    runCorner.Parent = runBtn
+
+    runBtn.MouseEnter:Connect(function()
+        runBtn.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    end)
+    runBtn.MouseLeave:Connect(function()
+        runBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    end)
+
+    runBtn.MouseButton1Click:Connect(function()
+        local ok, err = pcall(processCommand, cmdBox.Text)
+        if not ok then
+            flashButtonAndNotify(runBtn, Color3.fromRGB(200,0,0), "Error", 1)
+            showNotification("Error", "Command failed: " .. tostring(err))
+        else
+            flashButtonAndNotify(runBtn, Color3.fromRGB(0,200,0), "Ran", 0.9)
+        end
+    end)
+
+    cmdBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local ok, err = pcall(processCommand, cmdBox.Text)
+            if not ok then
+                flashButtonAndNotify(cmdBox, Color3.fromRGB(200,0,0), "Error", 1)
+                showNotification("Error", "Command failed: " .. tostring(err))
+            else
+                flashButtonAndNotify(runBtn, Color3.fromRGB(0,200,0), "Ran", 0.9)
+            end
+        end
+    end)
+
+    flashButtonAndNotify(commandBtn, Color3.fromRGB(0,200,0), "Open", 0.8)
+end)
+
+-- Players button click (opens the players GUI)
+playersBtn.MouseButton1Click:Connect(function()
+    if not injected then
+        flashButtonAndNotify(playersBtn, Color3.fromRGB(200,0,0), "Error", 1)
+        showNotification("Error", "Inject First")
+        return
+    end
+    createPlayersGui()
+    flashButtonAndNotify(playersBtn, Color3.fromRGB(0,200,0), "Opened", 0.8)
+end)
+
+-- Inject button
+injectBtn.MouseButton1Click:Connect(function()
+    if injected then
+        flashButtonAndNotify(injectBtn, Color3.fromRGB(255,170,0), "Already Injected", 1)
+        showNotification("Warning", "Already Injected")
+    else
+        injected = true
+        flashButtonAndNotify(injectBtn, Color3.fromRGB(0,200,0), "Injected", 1)
+        showNotification("Injected", "Executor is now ready")
+    end
+end)
+
+-- Execute/Clear Buttons (basic execute using loadstring; must be injected)
+executeBtn.MouseButton1Click:Connect(function()
+    if not injected then
+        flashButtonAndNotify(executeBtn, Color3.fromRGB(200,0,0), "Error", 1)
+        showNotification("Error", "Inject First")
+        return
+    end
+    local code = codeBox.Text
+    if type(loadstring) ~= "function" and type(load) ~= "function" then
+        flashButtonAndNotify(executeBtn, Color3.fromRGB(200,0,0), "Error", 1)
+        showNotification("Error", "loadstring unavailable")
+        return
+    end
+    local loader = loadstring or load
+    local func, err
+    local okLoad, res = pcall(function() return loader(code) end)
+    if okLoad then func = res else err = res end
+    if not func then
+        flashButtonAndNotify(executeBtn, Color3.fromRGB(200,0,0), "Error", 1)
+        showNotification("Error", tostring(err))
+        return
+    end
+    local ok, ret = pcall(func)
+    if ok then
+        flashButtonAndNotify(executeBtn, Color3.fromRGB(0,200,0), "Executed", 1)
+        showNotification("Executed", "Script ran successfully")
+    else
+        flashButtonAndNotify(executeBtn, Color3.fromRGB(200,0,0), "Error", 1)
+        showNotification("Error", tostring(ret))
+    end
+end)
+
+clearBtn.MouseButton1Click:Connect(function()
+    codeBox.Text = ""
+    flashButtonAndNotify(clearBtn, Color3.fromRGB(200,0,0), "Cleared", 1)
+    showNotification("Cleared", "Code box has been cleared")
+end)
+
+-- chat listener for "!" prefixed commands (wrapped with pcall)
+player.Chatted:Connect(function(msg)
+    if type(msg) ~= "string" then return end
+    local ok, err = pcall(function()
+        local s = trim(msg)
+        if s:sub(1,1) == "!" then
+            processCommand(s:sub(2))
+        end
+    end)
+    if not ok then
+        showNotification("Error", "Chat command crashed: " .. tostring(err))
+    end
+end)
+
+-- initial message
+showNotification("Ready", "Type 'commands' via the Command button or chat with !commands")
+print("[SafeExecutor] Initialized")
