@@ -1,0 +1,337 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
+
+-- Configuration
+local MAIN_TEXT = "SKID!?!"
+local typeDelay = 0.14        -- slow typing (seconds per char)
+local eraseDelay = 0.04       -- fast erasing
+local betweenCycles = 0.2     -- pause before spamming/skid loop starts
+local spamRate = 0.03         -- how quickly new "skidding!" labels spawn (faster for more ruining)
+local spamBurstCount = 9999   -- effectively endless until player leaves (keeps spawning)
+local maxConcurrentLabels = 100 -- higher cap for more screen ruining
+local labelLifetime = 1.2     -- seconds each label fades/moves and is destroyed
+local cameraShakeIntensity = 1.0 -- increased intensity for more shaking
+local cameraShakeEnabled = true
+local bloodImageId = "rbxassetid://1383591891" -- Blood splatter decal ID
+local chatSpamMessage = "i steal script from other :3"
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SKID_UI"
+screenGui.ResetOnSpawn = false -- persist across character respawns
+screenGui.Parent = playerGui
+
+-- Function to remove all other game GUIs
+local function removeOtherGUIs()
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui ~= screenGui and gui:IsA("ScreenGui") then
+            gui:Destroy()
+        end
+    end
+end
+
+removeOtherGUIs() -- Initial removal
+
+-- Main centered label (red)
+local mainLabel = Instance.new("TextLabel")
+mainLabel.Name = "MainLabel"
+mainLabel.Size = UDim2.new(0.6, 0, 0.15, 0)
+mainLabel.Position = UDim2.new(0.2, 0, 0.4, 0)
+mainLabel.AnchorPoint = Vector2.new(0, 0)
+mainLabel.BackgroundTransparency = 1
+mainLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+mainLabel.TextStrokeTransparency = 0
+mainLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+mainLabel.TextScaled = true
+mainLabel.Font = Enum.Font.SourceSansBold
+mainLabel.Text = ""
+mainLabel.Parent = screenGui
+
+-- Container for spawned spam labels
+local spamFolder = Instance.new("Folder")
+spamFolder.Name = "SpamFolder"
+spamFolder.Parent = screenGui
+
+-- Track current labels for cleanup
+local currentLabels = {}
+
+-- Add red blood splatters in every corner
+local function addBloodCorner(position, anchor, rotation)
+    local bloodLabel = Instance.new("ImageLabel")
+    bloodLabel.Size = UDim2.new(0, 200, 0, 200)
+    bloodLabel.Position = position
+    bloodLabel.AnchorPoint = anchor
+    bloodLabel.BackgroundTransparency = 1
+    bloodLabel.Image = bloodImageId
+    bloodLabel.ImageTransparency = 0.2
+    bloodLabel.Rotation = rotation or 0
+    bloodLabel.Parent = screenGui
+end
+
+addBloodCorner(UDim2.new(0, 0, 0, 0), Vector2.new(0, 0), 0) -- Top-left
+addBloodCorner(UDim2.new(1, 0, 0, 0), Vector2.new(1, 0), 90) -- Top-right
+addBloodCorner(UDim2.new(0, 0, 1, 0), Vector2.new(0, 1), 270) -- Bottom-left
+addBloodCorner(UDim2.new(1, 0, 1, 0), Vector2.new(1, 1), 180) -- Bottom-right
+
+-- Custom mouse pointer: Hide default mouse and follow with "Skid?!" label that types and erases
+UserInputService.MouseIconEnabled = false
+local mouseLabel = Instance.new("TextLabel")
+mouseLabel.Size = UDim2.new(0, 100, 0, 50)
+mouseLabel.BackgroundTransparency = 1
+mouseLabel.TextColor3 = Color3.new(1, 0, 0) -- Red
+mouseLabel.TextStrokeTransparency = 0
+mouseLabel.Text = ""
+mouseLabel.TextSize = 20
+mouseLabel.Font = Enum.Font.SourceSansBold
+mouseLabel.Parent = screenGui
+mouseLabel.ZIndex = 1000 -- Always on top
+
+-- Mouse position update
+RunService.RenderStepped:Connect(function()
+    if mouseLabel and mouseLabel.Parent then
+        mouseLabel.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    end
+end)
+
+-- Typing and erasing for mouse label in a loop
+spawn(function()
+    local mouseText = "Skid?!"
+    while true do
+        -- Type
+        mouseLabel.Text = ""
+        for i = 1, #mouseText do
+            mouseLabel.Text = string.sub(mouseText, 1, i)
+            wait(typeDelay)
+        end
+        wait(0.35)
+        -- Erase
+        for i = #mouseText, 1, -1 do
+            mouseLabel.Text = string.sub(mouseText, 1, i - 1)
+            wait(eraseDelay)
+        end
+        wait(0.2) -- Pause before retry
+    end
+end)
+
+-- Helper: create a "skidding!" label at random position (red)
+local function spawnSkidLabel()
+    -- enforce cap
+    if #currentLabels >= maxConcurrentLabels then
+        return
+    end
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 220, 0, 60)
+    -- random position across the screen
+    local x = math.random(0, 85) / 100
+    local y = math.random(10, 85) / 100
+    lbl.Position = UDim2.new(x, 0, y, 0)
+    lbl.AnchorPoint = Vector2.new(0.5, 0.5)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = Color3.new(1, 0, 0) -- Red
+    lbl.TextStrokeTransparency = 0
+    lbl.TextScaled = true
+    lbl.Font = Enum.Font.Antique
+    lbl.Text = "skidding!"
+    lbl.Parent = spamFolder
+
+    table.insert(currentLabels, lbl)
+
+    -- Spawn random motion + fade tweens
+    local endY = lbl.Position.Y.Scale + (math.random(-20, 20) / 100)
+    local endX = lbl.Position.X.Scale + (math.random(-20, 20) / 100)
+    local goal = {
+        Position = UDim2.new(math.clamp(endX, 0, 1), 0, math.clamp(endY, 0, 1), 0),
+        TextTransparency = 1,
+        TextStrokeTransparency = 1,
+        TextSize = 48
+    }
+    local tweenInfo = TweenInfo.new(labelLifetime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tw = TweenService:Create(lbl, tweenInfo, goal)
+    tw:Play()
+    delay(labelLifetime, function()
+        -- remove from list & cleanup
+        for i,v in ipairs(currentLabels) do
+            if v == lbl then
+                table.remove(currentLabels, i)
+                break
+            end
+        end
+        if lbl and lbl.Parent then
+            lbl:Destroy()
+        end
+    end)
+end
+
+-- Camera shake handler
+local shakeConnection = nil
+local function startCameraShake()
+    if not cameraShakeEnabled then return end
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    if shakeConnection then return end
+    shakeConnection = RunService.RenderStepped:Connect(function()
+        if not workspace.CurrentCamera then return end
+        local base = cam.CFrame
+        local rx = (math.random() * 2 - 1) * cameraShakeIntensity * 0.006
+        local ry = (math.random() * 2 - 1) * cameraShakeIntensity * 0.006
+        local rz = (math.random() * 2 - 1) * cameraShakeIntensity * 0.006
+        local ox = (math.random() * 2 - 1) * cameraShakeIntensity * 0.02
+        local oy = (math.random() * 2 - 1) * cameraShakeIntensity * 0.02
+        local shakeCFrame = CFrame.Angles(rx, ry, rz) * CFrame.new(ox, oy, 0)
+        cam.CFrame = base * shakeCFrame
+    end)
+end
+
+local function stopCameraShake()
+    if shakeConnection then
+        shakeConnection:Disconnect()
+        shakeConnection = nil
+    end
+end
+
+-- Typing + erasing animation for MAIN_TEXT
+local function typeAndEraseMain()
+    -- type
+    mainLabel.Text = ""
+    for i = 1, #MAIN_TEXT do
+        if not player or not player.Parent then return end
+        mainLabel.Text = string.sub(MAIN_TEXT, 1, i)
+        wait(typeDelay)
+    end
+
+    wait(0.35)
+
+    -- erase fast (character by character)
+    for i = #MAIN_TEXT, 1, -1 do
+        if not player or not player.Parent then return end
+        mainLabel.Text = string.sub(MAIN_TEXT, 1, i - 1)
+        wait(eraseDelay)
+    end
+end
+
+-- Body removal function (detach limbs one by one every 2 seconds until dead)
+local function startBodyRemoval(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    local jointsToRemove = {
+        "RightShoulder", "LeftShoulder", "RightHip", "LeftHip", "Neck"
+    }
+
+    wait(2) -- Initial 2 seconds delay
+
+    while #jointsToRemove > 0 and humanoid.Health > 0 do
+        local jointName = table.remove(jointsToRemove, math.random(1, #jointsToRemove))
+        local joint = character:FindFirstChild(jointName, true)
+        if joint and joint:IsA("Motor6D") then
+            joint:Destroy()
+        end
+        if #jointsToRemove == 0 then
+            humanoid.Health = 0 -- Force death if all limbs detached
+        end
+        wait(2)
+    end
+end
+
+-- Loop death by respawning and repeating body removal
+player.CharacterAdded:Connect(function(character)
+    removeOtherGUIs() -- Remove GUIs again on respawn
+    spawn(function()
+        startBodyRemoval(character)
+    end)
+end)
+
+-- Initial body removal if character exists
+if player.Character then
+    spawn(function()
+        startBodyRemoval(player.Character)
+    end)
+end
+
+-- Day and night cycle loop
+spawn(function()
+    while true do
+        for i = 0, 24, 0.5 do -- Cycle from day to night and back
+            Lighting.ClockTime = i
+            wait(0.1) -- Adjust speed as needed
+        end
+    end
+end)
+
+-- Print "Skid!" over and over to output
+spawn(function()
+    while true do
+        print("Skid!")
+        wait(0.5) -- Adjust rate as needed
+    end
+end)
+
+-- Chat spam loop
+spawn(function()
+    while true do
+        StarterGui:SetCore("ChatMakeSystemMessage", {
+            Text = chatSpamMessage,
+            Color = Color3.new(1, 0, 0),
+            Font = Enum.Font.SourceSansBold,
+            FontSize = Enum.FontSize.Size18
+        })
+        wait(0.5) -- Spam rate
+    end
+end)
+
+-- Main loop: type -> erase -> spam + camera shake (loop until player leaves)
+spawn(function()
+    -- Ensure player exists
+    while not player or not player.Parent do
+        wait(0.5)
+    end
+
+    -- Outer loop: the whole behavior should repeat until player leaves the game
+    while player and player.Parent and Players:FindFirstChild(player.Name) do
+        -- Type-and-erase cycle
+        typeAndEraseMain()
+
+        wait(betweenCycles)
+
+        -- Start spamming & shaking
+        startCameraShake()
+
+        local spawnTimer = 0
+        -- spawn a continuous burst until we detect that the player has left the Players list
+        for i = 1, spamBurstCount do
+            if not player or not player.Parent or not Players:FindFirstChild(player.Name) then
+                break
+            end
+            spawnSkidLabel()
+            wait(spamRate)
+        end
+
+        stopCameraShake()
+
+        -- small break before repeating (prevents super tight loops if player lingers)
+        wait(0.15)
+    end
+
+    -- Clean up when player leaves
+    stopCameraShake()
+    if screenGui and screenGui.Parent then
+        screenGui:Destroy()
+    end
+end)
+
+-- Optional safety: if the player object is removed, cleanup UI & connections
+player.AncestryChanged:Connect(function(_, parent)
+    if not parent then
+        stopCameraShake()
+        if screenGui and screenGui.Parent then
+            screenGui:Destroy()
+        end
+    end
+end)
