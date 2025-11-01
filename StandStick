@@ -1,0 +1,184 @@
+-- YBA-only wrapper that auto-queues main script on teleport when possible
+local TARGET_PLACE = 2809202155
+local SCRIPT_URL = "https://raw.githubusercontent.com/KieuroBeep/TrixSpoits/refs/heads/main/StandStickScript"
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+
+local LocalPlayer = Players.LocalPlayer or Players:WaitForChild("LocalPlayer", 5)
+if not LocalPlayer then return end
+
+local function safe_pcall(f, ...)
+    local ok, res = pcall(f, ...)
+    if not ok then
+        -- you can uncomment for debugging in executor consoles:
+        -- warn("[YBA-Wrapper] error:", res)
+    end
+    return ok, res
+end
+
+local function queue_for_teleport(code)
+    -- Try common exploit/loader queue functions so code runs automatically after teleport.
+    -- This tries multiple known names used by executors (syn, KRNL, etc).
+    local tried = {}
+
+    -- 1) syn (Synapse)
+    if syn and type(syn.queue_on_teleport) == "function" then
+        safe_pcall(syn.queue_on_teleport, code)
+        return true
+    end
+
+    -- 2) global queue_on_teleport
+    if type(queue_on_teleport) == "function" then
+        safe_pcall(queue_on_teleport, code)
+        return true
+    end
+
+    -- 3) common alternative global names
+    if type(queueonteleport) == "function" then
+        safe_pcall(queueonteleport, code)
+        return true
+    end
+
+    -- 4) some executors expose it under different tables
+    local possible_tables = {getgenv and getgenv() or nil, _G}
+    for _, tbl in ipairs(possible_tables) do
+        if type(tbl) == "table" then
+            if type(tbl.queue_on_teleport) == "function" then
+                safe_pcall(tbl.queue_on_teleport, code)
+                return true
+            end
+            if type(tbl.queueonteleport) == "function" then
+                safe_pcall(tbl.queueonteleport, code)
+                return true
+            end
+        end
+    end
+
+    -- 5) syn/other synonyms check inside global environment table names (defensive)
+    if type(getfenv) == "function" then
+        local ok, env = pcall(function() return getfenv() end)
+        if ok and type(env) == "table" then
+            if type(env.queue_on_teleport) == "function" then
+                safe_pcall(env.queue_on_teleport, code)
+                return true
+            end
+        end
+    end
+
+    -- if none found, return false (can't queue automatically)
+    return false
+end
+
+-- The actual code we want to run after teleport (string)
+local main_code = ("loadstring(game:HttpGet('%s'))()"):format(SCRIPT_URL)
+
+if game.PlaceId == TARGET_PLACE then
+    -- In correct place: load immediately
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet(SCRIPT_URL))()
+    end)
+    if not ok then
+        warn("[YBA-Wrapper] Failed to load main script: "..tostring(err))
+    end
+else
+    -- Show UI
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "YBA_OnlyNotice"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 420, 0, 140)
+    frame.Position = UDim2.new(0.5, -210, 0.5, -70)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+    frame.ClipsDescendants = true
+    frame.Name = "YBANoticeFrame"
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 60)
+    title.Position = UDim2.new(0, 10, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "Dude Wrong game press join to join the right game - advice = READ THE FUCKING CAPTION!!"
+    title.TextWrapped = true
+    title.TextScaled = false
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 20
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Parent = frame
+
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.new(1, -20, 0, 28)
+    info.Position = UDim2.new(0, 10, 0, 70)
+    info.BackgroundTransparency = 1
+    info.Text = "Wrong Game Dude you need to press join if you want to go the the right game"
+    info.TextWrapped = true
+    info.TextScaled = false
+    info.Font = Enum.Font.SourceSans
+    info.TextSize = 14
+    info.TextColor3 = Color3.fromRGB(200, 200, 200)
+    info.Parent = frame
+
+    local joinBtn = Instance.new("TextButton")
+    joinBtn.Size = UDim2.new(0, 120, 0, 40)
+    joinBtn.Position = UDim2.new(1, -140, 1, -50)
+    joinBtn.AnchorPoint = Vector2.new(0, 0)
+    joinBtn.Text = "Join?"
+    joinBtn.Font = Enum.Font.SourceSansBold
+    joinBtn.TextSize = 20
+    joinBtn.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+    joinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    joinBtn.Parent = frame
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 80, 0, 30)
+    closeBtn.Position = UDim2.new(0, 10, 1, -40)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+    closeBtn.Text = "Close"
+    closeBtn.Font = Enum.Font.SourceSans
+    closeBtn.TextSize = 18
+    closeBtn.Parent = frame
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -20, 0, 18)
+    statusLabel.Position = UDim2.new(0, 10, 1, -20)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = ""
+    statusLabel.Font = Enum.Font.SourceSansItalic
+    statusLabel.TextSize = 14
+    statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    statusLabel.TextWrapped = true
+    statusLabel.Parent = frame
+
+    local debounce = false
+    joinBtn.MouseButton1Click:Connect(function()
+        if debounce then return end
+        debounce = true
+        statusLabel.Text = "Preparing teleport..."
+        -- Try to queue the script string for teleport
+        local ok = false
+        local success, err = pcall(function()
+            ok = queue_for_teleport(main_code)
+        end)
+        if not success then ok = false end
+
+        if ok then
+            statusLabel.Text = "Script queued — teleporting now."
+        else
+            statusLabel.Text = "Auto-queue not available for your executor. Teleporting anyway."
+        end
+
+        -- Give a short delay so user sees the message, then teleport
+        wait(0.5)
+        pcall(function()
+            TeleportService:Teleport(TARGET_PLACE, LocalPlayer)
+        end)
+    end)
+
+    closeBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+end
