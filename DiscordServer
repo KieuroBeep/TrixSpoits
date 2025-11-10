@@ -1,0 +1,98 @@
+-- Roblox Script: Discord Invite Pop-up
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DiscordPopup"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+-- Create Frame (Pop-up)
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 400, 0, 150)
+frame.Position = UDim2.new(0.5, -200, -0.5, -150) -- start offscreen top
+frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+frame.BorderSizePixel = 0
+frame.AnchorPoint = Vector2.new(0.5, 0.5)
+frame.Parent = screenGui
+frame.ClipsDescendants = true
+frame.Rotation = -10
+
+-- Create UIStroke for style
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(255, 170, 0)
+stroke.Parent = frame
+
+-- Create TextLabel
+local textLabel = Instance.new("TextLabel")
+textLabel.Size = UDim2.new(1, -20, 0.6, -10)
+textLabel.Position = UDim2.new(0, 10, 0, 10)
+textLabel.BackgroundTransparency = 1
+textLabel.Text = "Do you want to join the Discord server?\nFor updates and more!"
+textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+textLabel.TextScaled = true
+textLabel.Font = Enum.Font.GothamBold
+textLabel.Parent = frame
+
+-- Create Buttons
+local yesButton = Instance.new("TextButton")
+yesButton.Size = UDim2.new(0.4, 0, 0.25, 0)
+yesButton.Position = UDim2.new(0.05, 0, 0.65, 0)
+yesButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+yesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+yesButton.Text = "Yes"
+yesButton.Font = Enum.Font.GothamBold
+yesButton.TextScaled = true
+yesButton.Parent = frame
+
+local noButton = Instance.new("TextButton")
+noButton.Size = UDim2.new(0.4, 0, 0.25, 0)
+noButton.Position = UDim2.new(0.55, 0, 0.65, 0)
+noButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+noButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+noButton.Text = "No"
+noButton.Font = Enum.Font.GothamBold
+noButton.TextScaled = true
+noButton.Parent = frame
+
+-- Tween for pop-up animation
+local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out)
+TweenService:Create(frame, tweenInfo, {Position = UDim2.new(0.5, -200, 0.3, 0), Rotation = 0}):Play()
+
+-- Function for Yes button
+yesButton.MouseButton1Click:Connect(function()
+    -- Copy Discord link
+    setclipboard("https://discord.gg/GfKNNFm7")
+    
+    -- Hide first popup
+    TweenService:Create(frame, TweenInfo.new(0.5), {Position = UDim2.new(0.5, -200, -0.5, -150)}):Play()
+    
+    wait(0.5)
+    
+    -- Show confirmation popup
+    local confirmFrame = frame:Clone()
+    confirmFrame.Position = UDim2.new(0.5, -200, -0.5, -150)
+    confirmFrame.Rotation = -10
+    confirmFrame.Parent = screenGui
+    confirmFrame.TextLabel.Text = "Discord server is Copied :3"
+    confirmFrame:FindFirstChild("TextButton"):Destroy() -- remove buttons
+    
+    TweenService:Create(confirmFrame, tweenInfo, {Position = UDim2.new(0.5, -200, 0.3, 0), Rotation = 0}):Play()
+    
+    wait(2)
+    confirmFrame:Destroy()
+end)
+
+-- Function for No button
+noButton.MouseButton1Click:Connect(function()
+    TweenService:Create(frame, TweenInfo.new(0.5), {Position = UDim2.new(0.5, -200, -0.5, -150)}):Play()
+    wait(0.5)
+    frame:Destroy()
+end)
