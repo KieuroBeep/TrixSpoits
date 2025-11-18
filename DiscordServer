@@ -69,7 +69,7 @@ TweenService:Create(frame, tweenInfo, {Position = UDim2.new(0.5, -200, 0.3, 0), 
 -- Function for Yes button
 yesButton.MouseButton1Click:Connect(function()
     -- Copy Discord link
-    setclipboard("https://discord.gg/GfKNNFm7")
+    setclipboard("https://discord.gg/5DKVpXFE")
     
     -- Hide first popup
     TweenService:Create(frame, TweenInfo.new(0.5), {Position = UDim2.new(0.5, -200, -0.5, -150)}):Play()
