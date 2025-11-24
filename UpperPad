@@ -1,0 +1,10 @@
+local pad = Instance.new("Part")
+
+pad.Size = Vector3.new(10000, 1, 10000)
+pad.Position = Vector3.new(-139.164612, 60.740036, -372.339508)
+pad.Anchored = true
+pad.CanCollide = true
+pad.Color = Color3.fromRGB(255, 255, 255)
+pad.Transparency = 0.95
+pad.Name = "WhitePad"
+pad.Parent = game.Workspace
