@@ -1,0 +1,563 @@
+local WindUI
+do
+    local ok, result = pcall(function()
+        return require("./src/Init")
+    end)
+
+    if ok then
+        WindUI = result
+    else
+        WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+    end
+end
+local Window = WindUI:CreateWindow({
+    Title = "Traversal HUB",
+    Author = "Edited by Diablo",
+    Folder = "TraversalHUB",
+    NewElements = true,
+
+    HideSearchBar = false,
+
+    OpenButton = {
+        Title = "Open Traversal HUB UI",
+        CornerRadius = UDim.new(1,0),
+        StrokeThickness = 3,
+        Enabled = true,
+        Draggable = true,
+        OnlyMobile = false,
+
+        Color = ColorSequence.new(
+            Color3.fromHex("#30FF6A"),
+            Color3.fromHex("#e7ff2f")
+        )
+    }
+})
+
+local function safeNotify(title, desc, icon)
+    pcall(function()
+        if WindUI and WindUI.Notify then
+            WindUI:Notify({ Title = title, Desc = desc or "", Icon = icon or "info" })
+        else
+            print("[Notify] " .. (title or "") .. ": " .. (desc or ""))
+        end
+    end)
+end
+
+local isUIOpen = true
+local function applyVisibility(state)
+    local success = pcall(function()
+        if typeof(Window.SetVisible) == "function" then
+            Window:SetVisible(state)
+            return
+        end
+        if typeof(Window.SetVisibility) == "function" then
+            Window:SetVisibility(state)
+            return
+        end
+        if typeof(Window.Toggle) == "function" then
+            Window:Toggle()
+            return
+        end
+        if rawget(Window, "Open") ~= nil then
+            Window.Open = state
+            return
+        end
+        if typeof(Window.Set) == "function" then
+            Window:Set("Visible", state)
+            return
+        end
+    end)
+    if not success then
+        safeNotify("UI Toggle failed", "Unable to change WindUI visibility with detected API", "alert-circle")
+    end
+end
+local function toggleWindow()
+    isUIOpen = not isUIOpen
+    applyVisibility(isUIOpen)
+end
+
+local UIS = game:GetService("UserInputService")
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if UIS:GetFocusedTextBox() then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.K then
+        toggleWindow()
+    end
+end)
+
+local UpdateLogsTab = Window:Tab({ Title = "UPDATE LOGS", Icon = "square-pen", })
+local UpdateSection = UpdateLogsTab:Section({ Title = "Update Details", })
+UpdateSection:Paragraph({ Title = "RECENT UPDATE", Desc = "11/29/2025", })
+UpdateSection:Paragraph({ Title = "ADDED FEATURES", Desc = "INCLUDED NEW VISUAL TAB WITH ESP OPTIONS,// ADDED NOCLIP TOGGLE,// ADDED FLY MODE TOGGLE,// UPDATED DELETE TOOL INTERFACE,// ENHANCED ENEMY MANIPULATION OPTIONS,// IMPROVED WEAPON SPAWNING,// STABILIZED GODMODE FURTHER", })
+UpdateSection:Section({ Title = "PRESS M TO FREE CURSOR, K TO TOGGLE UI VISIBILITY", })
+
+local GodmodeTab = Window:Tab({ Title = "GODMODE", Icon = "heart-pulse", })
+local godmodeEnabled = false
+local godmodeTask
+GodmodeTab:Toggle({
+    Title = "Enable Godmode",
+    Flag = "GodmodeToggle",
+    Default = false,
+    Callback = function(state)
+        godmodeEnabled = state
+        if state then
+            safeNotify("Godmode", "Enabled", "shield-check")
+            godmodeTask = task.spawn(function()
+                while godmodeEnabled do
+                    local args = {
+                        [1] = {
+                            [1] = {
+                                [1] = "\25",
+                                [2] = game:GetService("Players").LocalPlayer.Character.Humanoid,
+                                [3] = math.huge
+                            }
+                        }
+                    }
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+                    end)
+                    task.wait()
+                end
+            end)
+        else
+            if godmodeTask then
+                task.cancel(godmodeTask)
+                godmodeTask = nil
+            end
+            safeNotify("Godmode", "Disabled", "shield-off")
+        end
+    end
+})
+
+local DeleteToolTab = Window:Tab({ Title = "DELETE TOOL", Icon = "eraser", })
+DeleteToolTab:Button({ Title = "ACTIVATE INTERFACE", Callback = function()
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/YegozovutSemyon/TraversalHUB/refs/heads/main/deletemenu'))()
+        safeNotify("Delete Tool", "Interface activated", "trash-2")
+    end, })
+local DeleteSection = DeleteToolTab:Section({ Title = "Usage Guide", })
+DeleteSection:Section({ Title = "FOR PATH-BASED DELETION, UTILIZE INFINITE YIELD AND RUN DEX COMMAND", })
+DeleteSection:Section({ Title = "• V - Switch Delete Mode On/Off", })
+DeleteSection:Section({ Title = "• E - Remove Selected Target", })
+DeleteSection:Section({ Title = "• Enter - Erase by Specified Path", })
+
+local InfStaminaTab = Window:Tab({ Title = "INF STAMINA", Icon = "rocket", })
+local staminaEnabled = false
+local staminaTask
+InfStaminaTab:Toggle({
+    Title = "Unlimited Stamina [UPDATED 05/31]",
+    Flag = "InfStaminaToggle",
+    Default = false,
+    Callback = function(state)
+        staminaEnabled = state
+        if state then
+            local okLoad, loaded = pcall(function()
+                return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Upbolt/Hydroxide/revision/ohaux.lua"))
+            end)
+            if not okLoad or type(loaded) ~= "function" then
+                safeNotify("Executor Unsupported", "Your executor is not good enough — please change a different one.", "alert-circle")
+                staminaEnabled = false
+                pcall(function() Window.Flags = Window.Flags or {} end)
+                return
+            end
+
+            local okRun, aux = pcall(loaded)
+            if not okRun or type(aux) ~= "table" or type(aux.searchClosure) ~= "function" then
+                safeNotify("Executor Unsupported", "Your executor is not good enough — please change a different one.", "alert-circle")
+                staminaEnabled = false
+                return
+            end
+
+            if not debug or type(debug.setupvalue) ~= "function" then
+                safeNotify("Executor Unsupported", "Your executor doesn't expose debug.setupvalue. Change to a different executor.", "alert-circle")
+                staminaEnabled = false
+                return
+            end
+
+            safeNotify("Inf Stamina", "Enabled", "infinite")
+            staminaTask = task.spawn(function()
+                while staminaEnabled do
+                    local Players = game:GetService("Players")
+                    local LocalPlayer = Players.LocalPlayer
+                    local scriptPath = nil
+                    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+                    if Character then
+                        scriptPath = Character:FindFirstChild("ClientCode")
+                    end
+                    if not scriptPath then
+                        local PlayerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+                        scriptPath = PlayerScripts:FindFirstChild("ClientCode")
+                    end
+                    if not scriptPath then
+                        task.wait(1)
+                        task.wait(1)
+                        return
+                    end
+                    local closureName = "Unnamed function"
+                    local upvalueIndex = 76
+                    local closureConstants = {
+                        [1] = "AssemblyLinearVelocity",
+                        [2] = "Magnitude",
+                        [3] = "Enum",
+                        [4] = "MouseBehavior",
+                        [5] = "LockCenter",
+                        [6] = Enum.MouseBehavior.LockCenter
+                    }
+                    local closure = aux.searchClosure(scriptPath, closureName, upvalueIndex, closureConstants)
+                    local value = math.huge
+                    if closure then
+                        pcall(function()
+                            debug.setupvalue(closure, upvalueIndex, value)
+                        end)
+                    end
+                    task.wait(1)
+                end
+            end)
+        else
+            if staminaTask then
+                task.cancel(staminaTask)
+                staminaTask = nil
+            end
+            safeNotify("Inf Stamina", "Disabled", "x-circle")
+        end
+    end
+})
+
+local EnemiesTab = Window:Tab({ Title = "ENEMIES", Icon = "skull", })
+EnemiesTab:Button({ Title = "ELIMINATE ENEMY LEGS", Callback = function()
+        for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+            local leftLeg = enemy:FindFirstChild("Left Leg")
+            local rightLeg = enemy:FindFirstChild("Right Leg")
+
+            if leftLeg then
+                local args = { [1] = { [1] = { [1] = "\24", [2] = leftLeg, [3] = math.huge } } }
+                pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+                end)
+            end
+
+            if rightLeg then
+                local args = { [1] = { [1] = { [1] = "\24", [2] = rightLeg, [3] = math.huge } } }
+                pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+                end)
+            end
+            task.wait(0.05)
+        end
+        safeNotify("Enemies", "Eliminate legs executed", "zap")
+    end, })
+EnemiesTab:Button({ Title = "DEACTIVATE ENEMY AI", Callback = function()
+        for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+            local enemyMain = enemy:FindFirstChild("EnemyMain")
+            if enemyMain then
+                local args = { [1] = { [1] = { [1] = "\24", [2] = enemyMain, [3] = math.huge } } }
+                pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+                end)
+            end
+            task.wait(0.05)
+        end
+        safeNotify("Enemies", "AI deactivated", "shield-off")
+    end, })
+EnemiesTab:Button({ Title = "STRIP ENEMY WEAPONS", Callback = function()
+        for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+            for _, descendant in pairs(enemy:GetDescendants()) do
+                if descendant.Name == "PrimaryHandle" or descendant.Name == "SecondaryHandle" or descendant.Name == "Handle" then
+                    local args = { [1] = { [1] = { [1] = "\24", [2] = descendant, [3] = math.huge } } }
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent"):FireServer(unpack(args))
+                    end)
+                end
+            end
+            task.wait(0.05)
+        end
+        safeNotify("Enemies", "Weapons stripped", "scissors")
+    end, })
+
+local WeaponsTab = Window:Tab({ Title = "WEAPONS", Icon = "swords", })
+WeaponsTab:Button({ Title = "SUMMON WEAPONS", Callback = function()
+        local targetRemote = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvent")
+        local weaponsToSpawn = { "Bat", "Knife", "Axe", "Machete", "Crowbar", "Chainsaw", "Katana", }
+        for _, weaponName in pairs(weaponsToSpawn) do
+            local weapon = workspace:FindFirstChild(weaponName, true)
+
+            if weapon then
+                local args = {{ { "\016", weapon } }}
+                pcall(function() targetRemote:FireServer(unpack(args)) end)
+            end
+
+            task.wait(0.2)
+        end
+        local workspaceFolders = { "Weapons", "Tools", "Items", "Drops", "SpawnedItems" }
+        for _, folderName in pairs(workspaceFolders) do
+            local folder = workspace:FindFirstChild(folderName)
+            if folder then
+                for _, weaponName in pairs(weaponsToSpawn) do
+                    local weapon = folder:FindFirstChild(weaponName)
+                    if weapon then
+                        local args = {{ { "\016", weapon } }}
+                        pcall(function() targetRemote:FireServer(unpack(args)) end)
+                        task.wait(0.2)
+                    end
+                end
+            end
+        end
+        safeNotify("Weapons", "Summon finished", "swords")
+    end, })
+
+local SigmaAuraTab = Window:Tab({ Title = "Sigma Boi AURA", Icon = "eye-off", })
+local sigmaEnabled = false
+SigmaAuraTab:Toggle({
+    Title = "Activate Sigma Aura",
+    Flag = "SigmaAuraToggle",
+    Default = false,
+    Callback = function(state)
+        sigmaEnabled = state
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local remoteEvent = ReplicatedStorage:WaitForChild("RemoteEvent")
+        local value = state and "True" or "False"
+        for i = 1, 30 do
+            local codeChar = string.char(i)
+            local args = { { { codeChar, value } } }
+            pcall(function() remoteEvent:FireServer(unpack(args)) end)
+            task.wait(0.1)
+        end
+        safeNotify("Sigma Aura", state and "Enabled" or "Disabled", "eye")
+    end
+})
+SigmaAuraTab:Space()
+local SigmaSection = SigmaAuraTab:Section({ Title = "Alerts and Details", })
+SigmaSection:Section({ Title = "DISABLING SIGMA WHILE PURSUED MAY LEAD TO ISSUES", })
+SigmaSection:Section({ Title = "NOTE: RIGHT-CLICKING DISRUPTS THE AURA, ALLOWING ATTACKS", })
+SigmaSection:Section({ Title = "THIS MODE ALLIES YOU WITH FOES? THEY WON'T ATTACK BUT WILL TRAIL YOU; DEMO WITH A FRIEND", })
+
+local MasksTab = Window:Tab({ Title = "Masks Unlocker", Icon = "lock-open", })
+MasksTab:Button({ Title = "Equip Clown Mask", Callback = function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local RemoteEvent = ReplicatedStorage.RemoteEvent
+        local ClownMask = ReplicatedStorage.Gamepasses.ClownMask
+        pcall(function() RemoteEvent:FireServer({ { "\31", ClownMask } }) end)
+        safeNotify("Mask", "Clown Mask equip attempt sent", "smile")
+    end, })
+MasksTab:Button({ Title = "Equip Tengu Mask", Callback = function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local RemoteEvent = ReplicatedStorage.RemoteEvent
+        local TenguMask = ReplicatedStorage.Gamepasses.TenguMask
+        pcall(function() RemoteEvent:FireServer({ { "\31", TenguMask } }) end)
+        safeNotify("Mask", "Tengu Mask equip attempt sent", "mask")
+    end, })
+MasksTab:Button({ Title = "Equip Smile Mask", Callback = function()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local RemoteEvent = ReplicatedStorage.RemoteEvent
+        local SmileMask = ReplicatedStorage.Gamepasses.SmileMask
+        pcall(function() RemoteEvent:FireServer({ { "\31", SmileMask } }) end)
+        safeNotify("Mask", "Smile Mask equip attempt sent", "smile")
+    end, })
+MasksTab:Space()
+local MasksSection = MasksTab:Section({ Title = "Details", })
+MasksSection:Section({ Title = "HAVE FUN!", })
+MasksSection:Section({ Title = "REFRESHED ON 24/07 WITH IMPROVED APPROACH, NOW FULLY FE AND CHAT COMPATIBLE", })
+
+local VisualTab = Window:Tab({ Title = "VISUAL", Icon = "eye", })
+
+local espEnemyEnabled = false
+local espEnemyConnections = {}
+VisualTab:Toggle({ Title = "ESP Enemy", Flag = "EspEnemyToggle", Default = false, Callback = function(state)
+        espEnemyEnabled = state
+        if state then
+            for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+                local highlight = Instance.new("Highlight")
+                highlight.Parent = enemy
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                table.insert(espEnemyConnections, enemy.DescendantAdded:Connect(function(desc)
+                    if desc:IsA("BasePart") then
+                        highlight.Adornee = enemy
+                    end
+                end))
+            end
+            table.insert(espEnemyConnections, workspace.Enemies.ChildAdded:Connect(function(enemy)
+                local highlight = Instance.new("Highlight")
+                highlight.Parent = enemy
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            end))
+            safeNotify("ESP Enemy", "Enabled", "eye")
+        else
+            for _, conn in pairs(espEnemyConnections) do
+                conn:Disconnect()
+            end
+            espEnemyConnections = {}
+            for _, enemy in pairs(workspace.Enemies:GetChildren()) do
+                local highlight = enemy:FindFirstChildOfClass("Highlight")
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+            safeNotify("ESP Enemy", "Disabled", "eye-off")
+        end
+    end })
+
+local espWeaponsEnabled = false
+local espWeaponsHighlights = {}
+VisualTab:Toggle({ Title = "ESP All Weapons", Flag = "EspWeaponsToggle", Default = false, Callback = function(state)
+        espWeaponsEnabled = state
+        local function addESPToWeapon(weapon)
+            if weapon:IsA("BasePart") or weapon:IsA("Model") then
+                local highlight = Instance.new("Highlight")
+                highlight.Parent = weapon
+                highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                table.insert(espWeaponsHighlights, highlight)
+            end
+        end
+        if state then
+            local folders = {"Weapons", "Tools", "Items", "Drops", "SpawnedItems"}
+            for _, folderName in pairs(folders) do
+                local folder = workspace:FindFirstChild(folderName)
+                if folder then
+                    for _, item in pairs(folder:GetChildren()) do
+                        addESPToWeapon(item)
+                    end
+                end
+            end
+            for _, item in pairs(workspace:GetDescendants()) do
+                if item.Name:match("Bat") or item.Name:match("Knife") or item.Name:match("Axe") or item.Name:match("Machete") or item.Name:match("Crowbar") or item.Name:match("Chainsaw") or item.Name:match("Katana") then
+                    addESPToWeapon(item)
+                end
+            end
+            table.insert(espWeaponsHighlights, workspace.DescendantAdded:Connect(function(item)
+                if item.Name:match("Bat") or item.Name:match("Knife") or item.Name:match("Axe") or item.Name:match("Machete") or item.Name:match("Crowbar") or item.Name:match("Chainsaw") or item.Name:match("Katana") then
+                    addESPToWeapon(item)
+                end
+            end))
+            safeNotify("ESP Weapons", "Enabled", "box")
+        else
+            for _, hl in pairs(espWeaponsHighlights) do
+                if typeof(hl) == "Instance" then
+                    hl:Destroy()
+                elseif typeof(hl) == "RBXScriptConnection" then
+                    hl:Disconnect()
+                end
+            end
+            espWeaponsHighlights = {}
+            safeNotify("ESP Weapons", "Disabled", "box")
+        end
+    end })
+
+local noclipEnabled = false
+local noclipConnection
+VisualTab:Toggle({ Title = "Noclip On/Off", Flag = "NoclipToggle", Default = false, Callback = function(state)
+        noclipEnabled = state
+        local player = game.Players.LocalPlayer
+        local character = player.Character
+        if state then
+            noclipConnection = game:GetService("RunService").Stepped:Connect(function()
+                if character then
+                    for _, part in pairs(character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+            safeNotify("Noclip", "Enabled", "move")
+        else
+            if noclipConnection then
+                noclipConnection:Disconnect()
+                noclipConnection = nil
+            end
+            if character then
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+            safeNotify("Noclip", "Disabled", "move")
+        end
+    end })
+
+local flyEnabled = false
+local flySpeed = 50
+local flyConnection
+local bodyVelocity
+VisualTab:Toggle({ Title = "Fly On/Off", Flag = "FlyToggle", Default = false, Callback = function(state)
+        flyEnabled = state
+        local player = game.Players.LocalPlayer
+        local character = player.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        if state then
+            if humanoidRootPart then
+                bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bodyVelocity.Parent = humanoidRootPart
+                flyConnection = game:GetService("RunService").RenderStepped:Connect(function()
+                    if humanoidRootPart then
+                        local cam = workspace.CurrentCamera
+                        local moveDirection = Vector3.new(0, 0, 0)
+                        if UIS:IsKeyDown(Enum.KeyCode.W) then
+                            moveDirection = moveDirection + cam.CFrame.LookVector
+                        end
+                        if UIS:IsKeyDown(Enum.KeyCode.S) then
+                            moveDirection = moveDirection - cam.CFrame.LookVector
+                        end
+                        if UIS:IsKeyDown(Enum.KeyCode.A) then
+                            moveDirection = moveDirection - cam.CFrame.RightVector
+                        end
+                        if UIS:IsKeyDown(Enum.KeyCode.D) then
+                            moveDirection = moveDirection + cam.CFrame.RightVector
+                        end
+                        if UIS:IsKeyDown(Enum.KeyCode.Space) then
+                            moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                        end
+                        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+                            moveDirection = moveDirection - Vector3.new(0, 1, 0)
+                        end
+                        if moveDirection.Magnitude > 0 then
+                            moveDirection = moveDirection.Unit * flySpeed
+                        end
+                        bodyVelocity.Velocity = moveDirection
+                    end
+                end)
+            end
+            safeNotify("Fly", "Enabled", "cloud")
+        else
+            if flyConnection then
+                flyConnection:Disconnect()
+                flyConnection = nil
+            end
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+                bodyVelocity = nil
+            end
+            safeNotify("Fly", "Disabled", "cloud")
+        end
+    end })
+
+local CreditsTab = Window:Tab({ Title = "Credits", Icon = "square-code", })
+local CreditsSection = CreditsTab:Section({ Title = "Acknowledgements", })
+CreditsSection:Section({ Title = "Semyon", })
+CreditsSection:Section({ Title = "WindUI", })
+
+local ConfigTab = Window:Tab({ Title = "Config", Icon = "folder", })
+local ConfigManager = Window.ConfigManager
+local ConfigName = "default"
+local ConfigNameInput = ConfigTab:Input({ Title = "Configuration Name", Icon = "file-cog", Callback = function(value) ConfigName = value end })
+local AllConfigs = ConfigManager:AllConfigs()
+local DefaultValue = table.find(AllConfigs, ConfigName) and ConfigName or nil
+ConfigTab:Dropdown({ Title = "Available Configs", Desc = "Choose from saved configurations", Values = AllConfigs, Value = DefaultValue, Callback = function(value) ConfigName = value ConfigNameInput:Set(value) end })
+ConfigTab:Space()
+ConfigTab:Button({ Title = "Save Configuration", Justify = "Center", Callback = function()
+        Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
+        if Window.CurrentConfig:Save() then
+            safeNotify("Config Saved", "Configuration '" .. ConfigName .. "' has been saved", "check")
+        end
+    end })
+ConfigTab:Space()
+ConfigTab:Button({ Title = "Load Configuration", Justify = "Center", Callback = function()
+        Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
+        if Window.CurrentConfig:Load() then
+            safeNotify("Config Loaded", "Configuration '" .. ConfigName .. "' has been loaded", "refresh-cw")
+        end
+    end })
