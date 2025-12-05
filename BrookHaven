@@ -1,4 +1,4 @@
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
+    local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
 workspace.FallenPartsDestroyHeight = -math.huge
 
 local Window = Library:MakeWindow({
@@ -1112,7 +1112,7 @@ end
     })
 
     Troll:AddToggle({
-        Name = "Spectar Player",
+        Name = "Spectate Player",
         Default = false,
         Callback = function(value)
             local Camera = workspace.CurrentCamera
@@ -1150,7 +1150,7 @@ end
         end
     })
 
-    local MethodSection = Troll:AddSection({ Name = "Métodos" })
+    local MethodSection = Troll:AddSection({ Name = "Methods" })
 
     Troll:AddDropdown({
         Name = "Select Method to Kill",
@@ -1163,7 +1163,7 @@ end
     })
 
     Troll:AddButton({
-        Name = "Matar Player",
+        Name = "Kill Player",
         Callback = function()
             if not selectedPlayerName or not Players:FindFirstChild(selectedPlayerName) then
                 print("Erro: Player not selected or does not exist")
@@ -3934,7 +3934,7 @@ end
 
 -- Variáveis globais
 local isUnbanActive = false
-local HouseTab = Window:MakeTab({"Casas", "home"})
+local HouseTab = Window:MakeTab({"Home", "home"})
 local SelectHouse = nil
 local NoclipDoor = nil
 
